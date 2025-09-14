@@ -1,0 +1,17 @@
+{
+  "name": "kusto-format",
+  "version": "1.0.0",
+  "description": "A web application to format Kusto KQL queries",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server . -p 8080",
+    "build": "echo 'No build step required for static files'"
+  },
+  "keywords": ["kusto", "kql", "format", "monaco", "editor"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
