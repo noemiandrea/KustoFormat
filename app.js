@@ -1,22 +1,28 @@
 class KustoFormatter {
     constructor() {
         this.outputEditor = null;
+        this.formattingOptions = new FormattingOptions();
+        this.advancedFormatter = new AdvancedKQLFormatter(this.formattingOptions);
+        this.formattingUI = null;
         this.init();
     }
 
     init() {
         this.setupEventListeners();
         this.setupOutputEditor();
+        this.setupFormattingUI();
     }
 
     setupEventListeners() {
         const formatBtn = document.getElementById('format-btn');
         const clearBtn = document.getElementById('clear-btn');
         const copyBtn = document.getElementById('copy-btn');
+        const optionsBtn = document.getElementById('options-btn');
         
         formatBtn.addEventListener('click', () => this.formatQuery());
         clearBtn.addEventListener('click', () => this.clearQuery());
         copyBtn.addEventListener('click', () => this.copyToClipboard());
+        optionsBtn.addEventListener('click', () => this.toggleFormattingOptions());
     }
 
     setupOutputEditor() {
@@ -33,11 +39,37 @@ class KustoFormatter {
         this.outputEditor = document.getElementById('output-editor');
     }
 
-    async formatQuery() {
+    setupFormattingUI() {
+        this.formattingUI = new FormattingOptionsUI(
+            this.formattingOptions,
+            () => this.onFormattingOptionsChanged()
+        );
+    }
+
+    onFormattingOptionsChanged() {
+        // Re-create the formatter with updated options
+        this.advancedFormatter = new AdvancedKQLFormatter(this.formattingOptions);
+        
+        // Re-format current query if there is one
+        const currentInput = document.getElementById('input-query').value.trim();
+        if (currentInput && this.outputEditor.value.trim()) {
+            this.formatQuery(false); // Don't show status message for automatic re-formatting
+        }
+    }
+
+    toggleFormattingOptions() {
+        const optionsBtn = document.getElementById('options-btn');
+        this.formattingUI.toggle();
+        optionsBtn.classList.toggle('active', this.formattingUI.isVisible);
+    }
+
+    async formatQuery(showStatus = true) {
         const inputQuery = document.getElementById('input-query').value.trim();
         
         if (!inputQuery) {
-            this.showStatus('Please enter a KQL query to format.', 'error');
+            if (showStatus) {
+                this.showStatus('Please enter a KQL query to format.', 'error');
+            }
             return;
         }
 
@@ -46,23 +78,40 @@ class KustoFormatter {
         formatBtn.textContent = 'Formatting...';
 
         try {
-            // Apply KQL formatting
-            const formattedQuery = this.formatKQLQuery(inputQuery);
+            // Apply advanced KQL formatting
+            const formattedQuery = this.advancedFormatter.format(inputQuery);
             
             if (this.outputEditor) {
                 this.outputEditor.value = formattedQuery;
             }
             
-            this.showStatus('Query formatted successfully!', 'success');
+            if (showStatus) {
+                this.showStatus('Query formatted successfully!', 'success');
+            }
         } catch (error) {
             console.error('Formatting error:', error);
-            this.showStatus('Error formatting query. Please check your KQL syntax.', 'error');
+            // Fallback to basic formatting
+            try {
+                const basicFormatted = this.formatKQLQuery(inputQuery);
+                if (this.outputEditor) {
+                    this.outputEditor.value = basicFormatted;
+                }
+                if (showStatus) {
+                    this.showStatus('Query formatted with basic formatter (advanced formatting failed).', 'warning');
+                }
+            } catch (basicError) {
+                console.error('Basic formatting also failed:', basicError);
+                if (showStatus) {
+                    this.showStatus('Error formatting query. Please check your KQL syntax.', 'error');
+                }
+            }
         } finally {
             formatBtn.disabled = false;
             formatBtn.textContent = 'Format Query';
         }
     }
 
+    // Keep the original basic formatting as fallback
     formatKQLQuery(query) {
         // Enhanced KQL formatting with proper indentation and structure
         let formatted = query
@@ -122,8 +171,10 @@ class KustoFormatter {
                 currentIndent = Math.max(indentLevel, 1);
             }
 
-            // Apply indentation
-            const indent = '    '.repeat(currentIndent);
+            // Apply indentation using the formatting options
+            const indentUnit = this.formattingOptions.options.indentationType === 'tabs' ? '\t' : 
+                             ' '.repeat(this.formattingOptions.options.indentationSize);
+            const indent = indentUnit.repeat(currentIndent);
             
             // Format the line content
             line = this.formatLineContent(line);
@@ -135,21 +186,31 @@ class KustoFormatter {
     }
 
     formatLineContent(line) {
-        // Format operators and keywords
+        // Format operators and keywords using formatting options
         return line
-            // Normalize spaces around operators
-            .replace(/\s*([=<>!]+)\s*/g, ' $1 ')
-            .replace(/\s*([,])\s*/g, '$1 ')
-            .replace(/\s+(and|or)\s+/gi, ' $1 ')
+            // Normalize spaces around operators based on options
+            .replace(/\s*([=<>!]+)\s*/g, (match, op) => {
+                return this.formattingOptions.shouldSpaceOperator(op) ? ` ${op} ` : op;
+            })
+            .replace(/\s*([,])\s*/g, (match, comma) => {
+                return this.formattingOptions.formatComma();
+            })
+            .replace(/\s+(and|or)\s+/gi, (match, op) => {
+                return this.formattingOptions.formatOperator(op);
+            })
             
-            // Format parentheses
-            .replace(/\s*([()])\s*/g, '$1')
-            .replace(/\(\s*/g, '(')
-            .replace(/\s*\)/g, ')')
+            // Format parentheses based on options
+            .replace(/\s*([()])\s*/g, (match, paren) => {
+                if (paren === '(') {
+                    return this.formattingOptions.options.spaceBeforeOpeningParenthesis ? ' (' : '(';
+                } else {
+                    return ')';
+                }
+            })
             
-            // Capitalize/format keywords (keep original casing for now, but ensure consistency)
+            // Format keywords using the selected case
             .replace(/\b(let|table|where|project|extend|summarize|join|union|sort|order|take|limit|distinct|count|top|evaluate|render|print|search|find|datatable|range|materialize|serialize|fork|facet|mv-expand|mv-apply|parse|parse-where|getschema|externaldata|invoke|as|asc|desc|by|on|kind|inner|left|right|outer|anti|semi|fullouter|leftanti|rightsemi|leftantisemi|rightanti|rightouter|leftouter|innerunique|leftouterunique|ago|now|startof|endof|bin|case|iff|iif|contains|startswith|endswith|matches|regex|split|strcat|strlen|substring|indexof|replace|extract|trim|toupper|tolower|todynamic|tostring|toint|tolong|toreal|todatetime|totimespan|min|max|sum|avg|count|dcount|make_set|make_list|arg_max|arg_min|any|percentile|stdev|variance|and|or|not|in|between|has|hasprefix|hassuffix)\b/gi, 
-                match => match.toLowerCase())
+                match => this.formattingOptions.formatKeyword(match))
             
             // Clean up extra spaces
             .replace(/\s+/g, ' ')
