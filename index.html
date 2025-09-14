@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KustoFormat - KQL Query Formatter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>KustoFormat</h1>
+            <p>Format your Kusto KQL queries with ease</p>
+        </header>
+
+        <main>
+            <div class="editor-section">
+                <h2>Input Query</h2>
+                <div class="input-container">
+                    <textarea id="input-query" placeholder="Enter your KQL query here..."></textarea>
+                </div>
+                <div class="controls">
+                    <button id="format-btn" type="button">Format Query</button>
+                    <button id="clear-btn" type="button">Clear</button>
+                </div>
+            </div>
+
+            <div class="output-section">
+                <h2>Formatted Query</h2>
+                <div class="output-container">
+                    <div id="monaco-editor"></div>
+                </div>
+                <div class="controls">
+                    <button id="copy-btn" type="button">Copy to Clipboard</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
